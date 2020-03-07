@@ -1,0 +1,139 @@
+﻿// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel Calculate
+
+
+struct BoneWeight
+{
+    float weight0, weight1, weight2, weight3;
+    int boneIndex0, boneIndex1, boneIndex2, boneIndex3;
+};
+
+
+RWStructuredBuffer<float3> BoneBuffer;
+RWStructuredBuffer<float3> PosBuffer;
+RWStructuredBuffer<BoneWeight> WeightBuffer;
+int VertexNum;
+int BoneNum;
+//float Scale;
+float Spread;
+
+//void SortY(int arraySize, out float2 input[30])
+//{
+//    for (int i = 0; i < arraySize - 1; i++)
+//    {
+//        for (int j = i; j < arraySize - 1; j++)
+//        {
+//            float2 temp;
+//            if (input[j].y > input[j + 1].y)
+//            {
+//                temp = input[j];
+//                input[j] = input[j + 1];
+//                input[j + 1] = temp;
+//            }
+//        }
+//    }
+//}
+
+[numthreads(8,1,1)]
+void Calculate(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x < VertexNum)
+    {
+        float2 distArr[30];
+        float dist2[5];
+        for (int j = 0; j < BoneNum; j++)
+        {
+            distArr[j] = float2(j, distance(PosBuffer[id.x], BoneBuffer[j]));
+            dist2[j] = distance(PosBuffer[id.x], BoneBuffer[j]);
+
+        }
+        
+        
+        
+       
+        // 冒泡排序
+        for (int i = 0; i < BoneNum - 1; i++)
+        {
+            for (int k = 0; k < BoneNum - 1 - i; k++)
+            {
+                if (distArr[k].y >= distArr[k + 1].y)
+                {
+                    float2 temp = distArr[k];
+                    float2 temp2 = distArr[k + 1];
+                    distArr[k] = temp2;
+                    distArr[k + 1] = temp;
+                }
+            }
+        }
+        
+             
+    
+        
+        WeightBuffer[id.x].boneIndex0 = (int) distArr[0].x;
+        WeightBuffer[id.x].boneIndex1 = (int) distArr[1].x;
+        WeightBuffer[id.x].boneIndex2 = (int) distArr[2].x;
+        WeightBuffer[id.x].boneIndex3 = (int) distArr[3].x;
+        
+        
+
+        // （计算权重比例）经过排序后只需选择前 4 个
+      
+        float sum = 0;
+        for (j = 0; j < 4; j++)
+            sum += distArr[j].y;
+
+        float percent[4];
+        for (j = 0; j < 4; j++)
+            percent[j] = distArr[j].y / sum;
+
+       // 将 percent 取反
+       
+        float weightRatio[4];
+        for (j = 0; j < 4; j++)
+            weightRatio[j] = percent[3 - j];
+
+
+        //WeightBuffer[id.x].boneIndex0 = (int) distArr[0].x;
+        //WeightBuffer[id.x].boneIndex1 = (int) distArr[1].x;
+        //WeightBuffer[id.x].boneIndex2 = (int) distArr[2].x;
+        //WeightBuffer[id.x].boneIndex3 = (int) distArr[3].x;
+        
+        //WeightBuffer[id.x].boneIndex0 = id.x % 4;
+        //WeightBuffer[id.x].boneIndex1 = (int) distArr[1].x;
+        //WeightBuffer[id.x].boneIndex2 = (int) distArr[2].x;
+        //WeightBuffer[id.x].boneIndex3 = (int) distArr[3].x;
+
+            //weights[i].weight0 = weightRatio[0];
+            //weights[i].weight1 = weightRatio[1];
+            //weights[i].weight2 = weightRatio[2];
+            //weights[i].weight3 = weightRatio[3];
+
+            //// 用另一种逐级递减分配权重的方式
+        float weightLeft = 1;
+        float finalWeight;
+        for (j = 0; j < 4; j++)
+        {
+            finalWeight = lerp(1, weightRatio[j], Spread);
+            if (weightLeft - finalWeight > 0)
+            {
+                weightLeft -= finalWeight;
+            }
+            else
+            {
+                finalWeight = weightLeft;
+                weightLeft = 0;
+            }
+            if (j == 0)
+                WeightBuffer[id.x].weight0 = finalWeight;
+            else if (j == 1)
+                WeightBuffer[id.x].weight1 = finalWeight;
+            else if (j == 2)
+                WeightBuffer[id.x].weight2 = finalWeight;
+            else if (j == 3)
+                WeightBuffer[id.x].weight3 = finalWeight;
+            
+         
+
+        }
+    }
+}
